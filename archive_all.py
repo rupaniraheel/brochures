@@ -34,9 +34,28 @@ class Links(HTMLParser):
 
 
 def request_bytes(url: str, timeout: int = 90) -> tuple[bytes, str]:
-    request = Request(url, headers={"User-Agent": UA, "Accept": "*/*"})
+    request = Request(
+        url,
+        headers={
+            "User-Agent": UA,
+            "Accept": "*/*",
+            "Cookie": "CONSENT=YES+cb; SOCS=CAISHAgCEhJnd3NfMjAyNjA4MjctMF9SQzEaAmVuIAEaBgiA_LyaBg",
+        },
+    )
     with urlopen(request, timeout=timeout) as response:
         return response.read(), response.headers.get("Content-Type", "")
+
+
+def resolve_google_redirect(url: str) -> str | None:
+    """Follow a Google /goto result link and return its Octara destination."""
+    try:
+        request = Request(url, headers={"User-Agent": UA, "Cookie": "CONSENT=YES+cb"})
+        with urlopen(request, timeout=30) as response:
+            destination = response.geturl()
+        return destination if destination != url else None
+    except Exception as exc:
+        print(f"Google redirect warning: {exc}")
+        return None
 
 
 def retry_request(url: str, attempts: int = 4) -> tuple[bytes, str]:
@@ -126,10 +145,14 @@ def search_result_urls() -> set[str]:
 
         for candidate in candidates:
             candidate = html.unescape(candidate).rstrip(".,);]")
+            candidate = urljoin("https://www.google.com/", candidate)
             parsed = urlparse(candidate)
-            if parsed.path == "/url":
-                parameters = parse_qs(parsed.query)
-                candidate = parameters.get("q", parameters.get("url", [""]))[0]
+            if parsed.hostname in {"google.com", "www.google.com"}:
+                if parsed.path == "/goto":
+                    candidate = resolve_google_redirect(candidate) or ""
+                elif parsed.path == "/url":
+                    parameters = parse_qs(parsed.query)
+                    candidate = parameters.get("q", parameters.get("url", [""]))[0]
             normalized = canonical(candidate)
             if normalized and is_pdf(normalized):
                 found.add(normalized)
