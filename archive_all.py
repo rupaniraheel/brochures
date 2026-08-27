@@ -228,7 +228,10 @@ def main() -> None:
             writer = csv.writer(handle)
             writer.writerow(("source_url", "error"))
             writer.writerows(failures)
-        raise RuntimeError(f"{len(failures)} PDF downloads failed; see FAILED.csv")
+        print(f"Warning: {len(failures)} PDF downloads failed; see FAILED.csv")
+    else:
+        failure_file = ROOT / "FAILED.csv"
+        failure_file.unlink(missing_ok=True)
 
     print(f"Archived and validated {len(records)} PDFs")
 
