@@ -1,6 +1,6 @@
 # Octara PDF archive
 
-This repository archives the ten PDF results returned for:
+This repository archives PDF results discovered across paginated web-search results and Octara's indexed publication pages for:
 
 ```text
 site:http://www.octara.com filetype:pdf
