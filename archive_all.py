@@ -103,33 +103,40 @@ def sitemap_pages() -> set[str]:
 
 
 def search_result_urls() -> set[str]:
+    """Collect PDF result URLs from consecutive Google result pages only."""
     found: set[str] = set()
     query = quote_plus("site:octara.com filetype:pdf")
-    search_pages = []
-    # Paginate beyond the first result page on both engines.
-    for offset in range(0, 200, 10):
-        search_pages.append(f"https://www.google.com/search?q={query}&start={offset}&filter=0")
-    for first in range(1, 202, 10):
-        search_pages.append(f"https://www.bing.com/search?q={query}&first={first}&count=10")
+    search_pages = [
+        f"https://www.google.com/search?q={query}&start={offset}&filter=0&num=10"
+        for offset in range(0, 300, 10)
+    ]
 
     for position, search_url in enumerate(search_pages, 1):
         try:
             document, _ = retry_request(search_url, attempts=2)
         except Exception as exc:
-            print(f"Search warning: {search_url}: {exc}")
+            print(f"Google warning: result page {position}: {exc}")
             continue
+
         text = html.unescape(document.decode("utf-8", "replace"))
-        candidates = re.findall(r"https?://[^\s\"'<>]+", text, re.I)
+        parser = Links()
+        parser.feed(text)
+        candidates = list(parser.links)
+        candidates.extend(re.findall(r"https?://[^\s\"'<>]+", text, re.I))
+
         for candidate in candidates:
-            candidate = candidate.rstrip(".,);]&")
+            candidate = html.unescape(candidate).rstrip(".,);]")
             parsed = urlparse(candidate)
-            # Unwrap common Google redirect links.
-            if parsed.hostname in {"google.com", "www.google.com"} and parsed.path == "/url":
-                candidate = parse_qs(parsed.query).get("q", [""])[0]
+            if parsed.path == "/url":
+                parameters = parse_qs(parsed.query)
+                candidate = parameters.get("q", parameters.get("url", [""]))[0]
             normalized = canonical(candidate)
             if normalized and is_pdf(normalized):
                 found.add(normalized)
-        print(f"Searched page {position}/{len(search_pages)}; PDFs found: {len(found)}")
+        print(
+            f"Google result page {position}/{len(search_pages)}; "
+            f"unique PDFs found: {len(found)}"
+        )
     return found
 
 
@@ -188,11 +195,9 @@ def main() -> None:
     }
     known.discard(None)
 
-    sitemap = sitemap_pages()
     search = search_result_urls()
-    linked = crawl_site({url for url in sitemap if not is_pdf(url)})
-    urls = {url for url in known | search | linked | sitemap if url and is_pdf(url)}
-    print(f"Discovered {len(urls)} unique PDF URLs")
+    urls = {url for url in known | search if url and is_pdf(url)}
+    print(f"Discovered {len(urls)} unique PDF URLs from Google results")
 
     PDF_DIR.mkdir(exist_ok=True)
     used: dict[str, str] = {}
