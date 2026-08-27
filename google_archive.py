@@ -124,19 +124,12 @@ def sitemap_pages() -> set[str]:
 def search_result_urls() -> set[str]:
     """Collect PDF URLs across broad and partitioned Google result pages."""
     found: set[str] = set()
-    queries = [
-        "site:octara.com filetype:pdf",
-        "site:octara.com/Publications filetype:pdf",
-        "site:octara.com/Brochures filetype:pdf",
-        "site:octara.com/wp-content/uploads filetype:pdf",
-    ]
-    queries.extend(
-        f"site:octara.com filetype:pdf {year}" for year in range(2009, 2027)
-    )
+    query = "site:octara.com filetype:pdf"
+    # Google reports roughly 155 matching results. Request them in two large
+    # pages instead of issuing hundreds of partitioned searches.
     search_pages = [
-        f"https://www.google.com/search?q={quote_plus(query)}&start={offset}&filter=0&num=10&hl=en&pws=0"
-        for query in queries
-        for offset in range(0, 100, 10)
+        f"https://www.google.com/search?q={quote_plus(query)}&start=0&filter=0&num=100&hl=en&pws=0",
+        f"https://www.google.com/search?q={quote_plus(query)}&start=100&filter=0&num=100&hl=en&pws=0",
     ]
 
     for position, search_url in enumerate(search_pages, 1):
@@ -154,7 +147,7 @@ def search_result_urls() -> set[str]:
         candidates = list(parser.links)
         candidates.extend(re.findall(r"https?://[^\s\"'<>]+", text, re.I))
 
-        for candidate in candidates:
+        for candidate in dict.fromkeys(candidates):
             candidate = html.unescape(candidate).rstrip(".,);]")
             candidate = urljoin("https://www.google.com/", candidate)
             parsed = urlparse(candidate)
